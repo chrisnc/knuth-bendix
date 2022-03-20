@@ -1,15 +1,17 @@
+/*
 use std::fmt;
 
-use crate::Term;
+use crate::{Term};
 
 #[derive(Clone)]
-pub struct Relation<V, O> {
+pub struct Relation<V, O: Op<V>> {
     left: Term<V, O>,
     right: Term<V, O>,
 }
 
-impl fmt::Display for Relation<String, String> {
+impl<V: fmt::Display, O: Op<V> + fmt::Display> fmt::Display for Relation<V, O> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} = {}", self.left, self.right)
     }
 }
+*/
