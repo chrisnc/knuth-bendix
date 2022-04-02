@@ -4,7 +4,6 @@ use std::fmt;
 
 pub trait Operator<'a>: Sized {
     type Var: Ord;
-    type Op: PartialEq;
     type Args: Iterator<Item = &'a Term<Self::Var, Self>>
     where
         Self: 'a;

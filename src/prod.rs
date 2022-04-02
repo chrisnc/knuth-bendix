@@ -12,12 +12,6 @@ pub enum Prod<'a> {
 }
 use Prod::*;
 
-#[derive(PartialEq, Eq)]
-pub enum Op {
-    One,
-    Mul,
-}
-
 pub enum Iter<'a> {
     Empty,
     Right(&'a Term<String, Prod<'a>>),
@@ -83,7 +77,6 @@ impl<'a> Prod<'a> {
 
 impl<'a> Operator<'a> for Prod<'a> {
     type Var = String;
-    type Op = Op;
     type Args = Iter<'a>;
 
     fn args(&'a self) -> Self::Args {
