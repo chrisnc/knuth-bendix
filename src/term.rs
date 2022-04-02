@@ -2,17 +2,6 @@ use std::cmp::*;
 use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
 
-pub trait Operator<'a>: Sized {
-    type Var: Ord;
-    type Args: Iterator<Item = &'a Term<Self::Var, Self>>
-    where
-        Self: 'a;
-
-    fn args(&'a self) -> Self::Args;
-
-    fn opeq(&self, other: &Self) -> bool;
-}
-
 #[derive(Clone, Debug)]
 pub enum Term<V, O> {
     Var(V),
@@ -20,9 +9,21 @@ pub enum Term<V, O> {
 }
 pub use Term::*;
 
+pub trait Operator<'a>: Sized {
+    type Var: Ord;
+    type ArgIter: Iterator<Item = &'a Term<Self::Var, Self>>
+    where
+        Self: 'a;
+
+    fn arg_iter(&'a self) -> Self::ArgIter;
+
+    fn opeq(&self, other: &Self) -> bool;
+}
+
 impl<'a, V: Ord, O: Operator<'a, Var = V>> Term<V, O> {
-    // Assign incrementing numbers to each variable encountered, returning the same number if the
-    // same variable appears later. Traversal is inorder.
+    /// Do an inorder traversal and collect a list of numbers representing the variables. Each
+    /// unique variable is mapped to a different number, starting from 1 and increasing in the
+    /// order of each variable first appears in the traversal.
     pub fn varseq(&'a self) -> Vec<u64> {
         let mut n: u64 = 0;
         let mut varmap: BTreeMap<&V, u64> = BTreeMap::new();
@@ -39,7 +40,7 @@ impl<'a, V: Ord, O: Operator<'a, Var = V>> Term<V, O> {
                     }));
                 }
                 Op(op) => {
-                    for a in op.args() {
+                    for a in op.arg_iter() {
                         terms.push_back(a);
                     }
                 }
@@ -48,16 +49,17 @@ impl<'a, V: Ord, O: Operator<'a, Var = V>> Term<V, O> {
         vars
     }
 
-    // Determine if two terms have the same operator structure, ignoring variables.
+    /// Determine if two terms have the same operator structure, ignoring variables.
     pub fn varopeq<'b: 'a>(&'a self, other: &'b Term<V, O>) -> bool {
         match (self, other) {
             (Var(_), Var(_)) => true,
-            (Op(f), Op(g)) => f.opeq(g) && f.args().zip(g.args()).all(|(ft, gt)| ft.varopeq(gt)),
+            (Op(f), Op(g)) => f.opeq(g) && f.arg_iter().zip(g.arg_iter()).all(|(ft, gt)| ft.varopeq(gt)),
             _ => false,
         }
     }
 
     // TODO: figure out how to implement the eq from PartialEq. For now, the lifetimes don't match.
+    /// Two terms are equal if they have the same operator structure and the variable sequence.
     pub fn eq<'b: 'a>(&'a self, other: &'b Term<V, O>) -> bool {
         self.varopeq(other) && self.varseq() == other.varseq()
     }

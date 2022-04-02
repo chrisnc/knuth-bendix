@@ -77,9 +77,9 @@ impl<'a> Prod<'a> {
 
 impl<'a> Operator<'a> for Prod<'a> {
     type Var = String;
-    type Args = Iter<'a>;
+    type ArgIter = Iter<'a>;
 
-    fn args(&'a self) -> Self::Args {
+    fn arg_iter(&'a self) -> Self::ArgIter {
         match self {
             One => Iter::Empty,
             Mul { left, right } => Iter::Both { left, right },
@@ -116,7 +116,7 @@ impl<'a> fmt::Display for Prod<'a> {
                     }));
                 }
                 Op(op) => {
-                    for a in op.args() {
+                    for a in op.arg_iter() {
                         terms.push_back(*a);
                     }
                 }
