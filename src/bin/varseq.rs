@@ -1,4 +1,3 @@
-use knuth_bendix::*;
 use knuth_bendix::prod::*;
 
 fn main() {
