@@ -1,4 +1,4 @@
-use std::fmt;
+use std::fmt::{self, Display};
 
 use crate::{Operator, Term};
 
@@ -61,18 +61,6 @@ impl<'a> Prod<'a> {
             Mul { left, right } => Iter::Both { left, right },
         }
     }
-
-    // TODO: use this
-    fn fmt_with_parens(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            One => write!(f, "1"),
-            Mul { left, right } => write!(f, "(")
-                .and(write!(f, "{}", left))
-                .and(write!(f, " * "))
-                .and(write!(f, "{}", right))
-                .and(write!(f, ")")),
-        }
-    }
 }
 
 impl<'a> Operator<'a> for Prod<'a> {
@@ -95,33 +83,62 @@ impl<'a> Operator<'a> for Prod<'a> {
     }
 }
 
+fn fmt_with_parens<'a, V: fmt::Display>(
+    t: &Term<V, Prod<'a>>,
+    f: &mut fmt::Formatter,
+) -> fmt::Result {
+    match t {
+        Term::Var(v) => v.fmt(f),
+        Term::Op(o) => o.fmt_with_parens(f),
+    }
+}
+
+impl<'a> Prod<'a> {
+    fn fmt_with_parens(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            One => "1".fmt(f),
+            Mul { .. } => "(".fmt(f).and(self.fmt(f)).and(")".fmt(f)),
+        }
+    }
+}
+
 impl<'a> fmt::Display for Prod<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             One => write!(f, "1"),
-            Mul { left, right } => left.fmt(f).and(write!(f, " * ")).and(right.fmt(f)),
+            Mul { left, right } => fmt_with_parens(left, f)
+                .and(" * ".fmt(f))
+                .and(fmt_with_parens(right, f)),
         }
+    }
+}
 
-        // TODO: use parentheses for subexpressions
-        /*
-        let mut terms: VecDeque<&'a Self> = VecDeque::new();
-        terms.push_back(self);
-        while let Some(t) = terms.pop_front() {
-            match p {
-                One => {
-                    vars.push(*varmap.entry(var).or_insert_with(|| {
-                        // If the variable hasn't been seen yet, assign a new number to it.
-                        n += 1;
-                        n
-                    }));
-                }
-                Op(op) => {
-                    for a in op.arg_iter() {
-                        terms.push_back(*a);
-                    }
-                }
-            }
-        }
-        */
+#[cfg(test)]
+mod tests {
+    use crate::prod::*;
+
+    #[test]
+    fn display() {
+        let a = Prod::var("a");
+        let b = Prod::var("b");
+        let m = Prod::mul(&a, &b);
+        let am = Prod::mul(&a, &m);
+        println!("{}", m);
+        println!("{}", am);
+    }
+
+    #[test]
+    fn eq() {
+        let a = Prod::var("a");
+        let b = Prod::var("b");
+        let c = Prod::var("c");
+        let d = Prod::var("d");
+        let tab = Prod::mul(&a, &b);
+        let tcd = Prod::mul(&c, &d);
+        let taa = Prod::mul(&a, &a);
+        let tbb = Prod::mul(&b, &b);
+        assert!(tab.eq(&tcd));
+        assert!(taa.eq(&tbb));
+        assert!(!taa.eq(&tab));
     }
 }

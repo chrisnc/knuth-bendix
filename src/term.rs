@@ -68,43 +68,14 @@ impl<'a, V: Ord, O: Operator<'a, Var = V>> Term<V, O> {
 /*
 impl<'a, 'l: 'a, 'r: 'a, V: Ord, O: Operator<'a, Var = V>> PartialEq for Term<V, O> {
     fn eq(&'l self, other: &'r Term<V, O>) -> bool {
-        self.eq_explicit(other)
-    }
-}
-*/
-
-/*
-impl<'a, V: Ord, O: Operator<'a, Var = V>> PartialEq for Term<V, O> {
-    fn eq(&self, other: &Term<V, O>) -> bool {
-        self.eq_explicit(other)
-    }
-}
-*/
-
-impl<'a, V: fmt::Display, O: Operator<'a> + fmt::Display> fmt::Display for Term<V, O> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Var(v) => write!(f, "{}", v),
-            Op(o) => write!(f, "{}", o),
-        }
-    }
-}
-
-/*
-impl<'a, V: Ord, O: PartialEq + Operator<'a, Var = V>> PartialEq for Term<V, O> {
-    fn eq<'b, 'c>(&'b self, other: &'c Term<V, O>) -> bool where 'b: 'a, 'c: 'a {
-        // First determine if the terms have the same operators.
-        (match (self, other) {
-            (Var(_), Var(_)) => true,
-            (Op(f), Op(g)) => f.opeq(g) && f.args().zip(g.args()).all(|(ft, gt)| ft.eq(gt)),
-            _ => false,
-        }) && self.varseq() == other.varseq()
+        self.varopeq(other) && self.varseq() == other.varseq()
     }
 }
 */
 
 /*
 // TODO: are these the right trait bounds?
+// TODO: implement this
 impl<'a, V: Ord, O: Operator<'a, Var = V> + Ord> PartialOrd for Term<V, O> {
     fn partial_cmp(&self, _other: &Term<V, O>) -> Option<Ordering> {
         // TODO
@@ -113,30 +84,13 @@ impl<'a, V: Ord, O: Operator<'a, Var = V> + Ord> PartialOrd for Term<V, O> {
 }
 */
 
-#[cfg(test)]
-mod tests {
-    use crate::prod::*;
+// TODO: implement common-subterm search
 
-    #[test]
-    fn display() {
-        let a = Prod::var("a");
-        let b = Prod::var("b");
-        let m = Prod::mul(&a, &b);
-        println!("{}", m);
-    }
-
-    #[test]
-    fn eq() {
-        let a = Prod::var("a");
-        let b = Prod::var("b");
-        let c = Prod::var("c");
-        let d = Prod::var("d");
-        let tab = Prod::mul(&a, &b);
-        let tcd = Prod::mul(&c, &d);
-        let taa = Prod::mul(&a, &a);
-        let tbb = Prod::mul(&b, &b);
-        assert!(tab.eq(&tcd));
-        assert!(taa.eq(&tbb));
-        assert!(!taa.eq(&tab));
+impl<V: fmt::Display, O: fmt::Display> fmt::Display for Term<V, O> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Var(v) => v.fmt(f),
+            Op(o) => o.fmt(f),
+        }
     }
 }
