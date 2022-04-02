@@ -2,6 +2,7 @@ use std::fmt::{self, Display};
 
 use crate::{Operator, Term};
 
+// TODO: allow subterms to have lifetimes shorter than the parent
 #[derive(Clone, Debug)]
 pub enum Prod<'a> {
     One,

@@ -9,6 +9,7 @@ pub enum Term<V, O> {
 }
 pub use Term::*;
 
+// TODO: allow arguments to have lifetimes shorter than the parent term
 pub trait Operator<'a>: Sized {
     type Var: Ord;
     type ArgIter: Iterator<Item = &'a Term<Self::Var, Self>>
