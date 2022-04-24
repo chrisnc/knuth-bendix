@@ -21,11 +21,6 @@ pub trait Operator: Sized {
     /// A unique number for each distinct operator, used for comparisons.
     fn op_index(&self) -> u64;
 
-    /// Equality just on the operator, ignoring its arguments.
-    fn op_eq(&self, other: &Self) -> bool {
-        self.op_index().eq(&other.op_index())
-    }
-
     /// Comparison just on the operator, ignoring its arguments.
     fn op_cmp(&self, other: &Self) -> Ordering {
         self.op_index().cmp(&other.op_index())
@@ -61,17 +56,7 @@ impl<V: Ord, O: Operator<Var = V>> Term<V, O> {
         vars
     }
 
-    /// Determine if two terms have the same operator structure, ignoring variables.
-    pub fn varop_eq(&self, other: &Term<V, O>) -> bool {
-        match (self, other) {
-            (Var(_), Var(_)) => true,
-            (Op(f), Op(g)) => {
-                f.op_eq(g) && f.arg_iter().eq_by(g.arg_iter(), |ft, gt| ft.varop_eq(gt))
-            }
-            _ => false,
-        }
-    }
-
+    /// Determine the comparison of two terms, using the operator structure, ignoring variables.
     pub fn varop_cmp(&self, other: &Term<V, O>) -> Ordering {
         match (self, other) {
             (Var(_), Var(_)) => Ordering::Equal,
@@ -92,7 +77,7 @@ impl<V: Ord, O: Operator<Var = V>> Term<V, O> {
 impl<V: Ord, O: Operator<Var = V>> PartialEq for Term<V, O> {
     /// Two terms are equal if they have the same operator structure and the variable sequence.
     fn eq(&self, other: &Term<V, O>) -> bool {
-        self.varop_eq(other) && self.var_seq() == other.var_seq()
+        self.cmp(other) == Ordering::Equal
     }
 }
 
