@@ -3,7 +3,6 @@ use std::ops;
 
 use crate::{Operator, Term};
 
-// TODO: allow subterms to have lifetimes longer than the parent
 #[derive(Clone, Debug)]
 pub enum Prod {
     One,
@@ -69,7 +68,7 @@ impl Operator for Prod {
         }
     }
 
-    fn index(&self) -> u64 {
+    fn op_index(&self) -> u64 {
         match self {
             One => 1,
             Mul { .. } => 2,

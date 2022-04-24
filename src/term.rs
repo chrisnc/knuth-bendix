@@ -19,16 +19,16 @@ pub trait Operator: Sized {
     fn arg_iter(&self) -> Self::ArgIter<'_>;
 
     /// A unique number for each distinct operator, used for comparisons.
-    fn index(&self) -> u64;
+    fn op_index(&self) -> u64;
 
     /// Equality just on the operator, ignoring its arguments.
     fn op_eq(&self, other: &Self) -> bool {
-        self.index().eq(&other.index())
+        self.op_index().eq(&other.op_index())
     }
 
     /// Comparison just on the operator, ignoring its arguments.
     fn op_cmp(&self, other: &Self) -> Ordering {
-        self.index().cmp(&other.index())
+        self.op_index().cmp(&other.op_index())
     }
 }
 
@@ -115,8 +115,6 @@ impl<V: Ord, O: Operator<Var = V>> Ord for Term<V, O> {
     }
 }
 
-// TODO: implement common-subterm search
-
 impl<V: fmt::Display, O: fmt::Display> fmt::Display for Term<V, O> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -125,3 +123,5 @@ impl<V: fmt::Display, O: fmt::Display> fmt::Display for Term<V, O> {
         }
     }
 }
+
+// TODO: implement common-subterm search
