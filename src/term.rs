@@ -2,7 +2,7 @@ use std::cmp::*;
 use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub enum Term<V, O> {
     Var(V),
     Op(O),
@@ -15,15 +15,28 @@ pub trait Operator: Sized {
     where
         Self: 'a;
 
+    /// An iterator over the arguments to an operator.
     fn arg_iter(&self) -> Self::ArgIter<'_>;
-    fn opeq(&self, other: &Self) -> bool;
+
+    /// A unique number for each distinct operator, used for comparisons.
+    fn index(&self) -> u64;
+
+    /// Equality just on the operator, ignoring its arguments.
+    fn op_eq(&self, other: &Self) -> bool {
+        self.index().eq(&other.index())
+    }
+
+    /// Comparison just on the operator, ignoring its arguments.
+    fn op_cmp(&self, other: &Self) -> Ordering {
+        self.index().cmp(&other.index())
+    }
 }
 
 impl<V: Ord, O: Operator<Var = V>> Term<V, O> {
     /// Do an inorder traversal and collect a list of numbers representing the variables. Each
     /// unique variable is mapped to a different number, starting from 1 and increasing in the
     /// order of each variable first appears in the traversal.
-    pub fn varseq(&self) -> Vec<u64> {
+    pub fn var_seq(&self) -> Vec<u64> {
         let mut n: u64 = 0;
         let mut varmap: BTreeMap<&V, u64> = BTreeMap::new();
         let mut terms: VecDeque<&Self> = VecDeque::new();
@@ -49,47 +62,58 @@ impl<V: Ord, O: Operator<Var = V>> Term<V, O> {
     }
 
     /// Determine if two terms have the same operator structure, ignoring variables.
-    pub fn varopeq(&self, other: &Term<V, O>) -> bool {
+    pub fn varop_eq(&self, other: &Term<V, O>) -> bool {
         match (self, other) {
             (Var(_), Var(_)) => true,
             (Op(f), Op(g)) => {
-                f.opeq(g)
-                    && f.arg_iter()
-                        .zip(g.arg_iter())
-                        .all(|(ft, gt)| ft.varopeq(gt))
+                f.op_eq(g) && f.arg_iter().eq_by(g.arg_iter(), |ft, gt| ft.varop_eq(gt))
             }
             _ => false,
         }
     }
 
+    pub fn varop_cmp(&self, other: &Term<V, O>) -> Ordering {
+        match (self, other) {
+            (Var(_), Var(_)) => Ordering::Equal,
+            (Var(_), Op(_)) => Ordering::Less,
+            (Op(_), Var(_)) => Ordering::Greater,
+            (Op(f), Op(g)) => {
+                let op_ordering = f.op_cmp(g);
+                if op_ordering == Ordering::Equal {
+                    f.arg_iter().cmp_by(g.arg_iter(), |ft, gt| ft.varop_cmp(gt))
+                } else {
+                    op_ordering
+                }
+            }
+        }
+    }
 }
 
 impl<V: Ord, O: Operator<Var = V>> PartialEq for Term<V, O> {
-    // TODO: figure out how to implement the eq from PartialEq. For now, the lifetimes don't match.
     /// Two terms are equal if they have the same operator structure and the variable sequence.
     fn eq(&self, other: &Term<V, O>) -> bool {
-        self.varopeq(other) && self.varseq() == other.varseq()
+        self.varop_eq(other) && self.var_seq() == other.var_seq()
     }
 }
 
-/*
-impl<V: Ord, O: Operator<'_, Var = V>> PartialEq for Term<V, O> {
-    fn eq(&self, other: &Term<V, O>) -> bool {
-        self.varopeq(other) && self.varseq() == other.varseq()
-    }
-}
-*/
+impl<V: Ord, O: Operator<Var = V>> Eq for Term<V, O> {}
 
-/*
-// TODO: are these the right trait bounds?
-// TODO: implement this
-impl<'a, V: Ord, O: Operator<'a, Var = V> + Ord> PartialOrd for Term<V, O> {
-    fn partial_cmp(&self, _other: &Term<V, O>) -> Option<Ordering> {
-        // TODO
-        None
+impl<V: Ord, O: Operator<Var = V>> PartialOrd for Term<V, O> {
+    fn partial_cmp(&self, other: &Term<V, O>) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
-*/
+
+impl<V: Ord, O: Operator<Var = V>> Ord for Term<V, O> {
+    fn cmp(&self, other: &Term<V, O>) -> Ordering {
+        let varop_ord = self.varop_cmp(other);
+        if varop_ord == Ordering::Equal {
+            self.var_seq().cmp(&other.var_seq())
+        } else {
+            varop_ord
+        }
+    }
+}
 
 // TODO: implement common-subterm search
 

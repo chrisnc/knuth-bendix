@@ -1,8 +1,9 @@
 use std::fmt::{self, Display};
+use std::ops;
 
 use crate::{Operator, Term};
 
-// TODO: allow subterms to have lifetimes shorter than the parent
+// TODO: allow subterms to have lifetimes longer than the parent
 #[derive(Clone, Debug)]
 pub enum Prod {
     One,
@@ -41,13 +42,6 @@ impl<'a> Iterator for Iter<'a> {
 }
 
 impl Prod {
-    pub fn mul(
-        left: Term<String, Prod>,
-        right: Term<String, Prod>,
-    ) -> Term<String, Prod> {
-        Term::Op(Mul { left: Box::new(left), right: Box::new(right) })
-    }
-
     pub fn var<S: Into<String>>(s: S) -> Term<String, Prod> {
         Term::Var(s.into())
     }
@@ -75,31 +69,31 @@ impl Operator for Prod {
         }
     }
 
-    fn opeq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (One, One) => true,
-            (Mul { .. }, Mul { .. }) => true,
-            _ => false,
+    fn index(&self) -> u64 {
+        match self {
+            One => 1,
+            Mul { .. } => 2,
         }
     }
 }
 
-fn fmt_with_parens<'a, V: fmt::Display>(
-    t: &Term<V, Prod>,
-    f: &mut fmt::Formatter,
-) -> fmt::Result {
+impl ops::Mul for Term<String, Prod> {
+    type Output = Term<String, Prod>;
+    fn mul(self, rhs: Self) -> Self::Output {
+        Term::Op(Mul {
+            left: Box::new(self),
+            right: Box::new(rhs),
+        })
+    }
+}
+
+fn fmt_with_parens<'a, V: fmt::Display>(t: &Term<V, Prod>, f: &mut fmt::Formatter) -> fmt::Result {
     match t {
         Term::Var(v) => v.fmt(f),
-        Term::Op(o) => o.fmt_with_parens(f),
-    }
-}
-
-impl Prod {
-    fn fmt_with_parens(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
+        Term::Op(o) => match o {
             One => "1".fmt(f),
-            Mul { .. } => "(".fmt(f).and(self.fmt(f)).and(")".fmt(f)),
-        }
+            Mul { .. } => "(".fmt(f).and(o.fmt(f)).and(")".fmt(f)),
+        },
     }
 }
 
@@ -117,13 +111,14 @@ impl fmt::Display for Prod {
 #[cfg(test)]
 mod tests {
     use crate::prod::*;
+    use std::cmp::*;
 
     #[test]
     fn display() {
         let a = Prod::var("a");
         let b = Prod::var("b");
-        let m = Prod::mul(a.clone(), b.clone());
-        let am = Prod::mul(a.clone(), m.clone());
+        let m = a.clone() * b.clone();
+        let am = a.clone() * m.clone();
         println!("{}", m);
         println!("{}", am);
     }
@@ -134,12 +129,48 @@ mod tests {
         let b = Prod::var("b");
         let c = Prod::var("c");
         let d = Prod::var("d");
-        let tab = Prod::mul(a.clone(), b.clone());
-        let tcd = Prod::mul(c.clone(), d.clone());
-        let taa = Prod::mul(a.clone(), a.clone());
-        let tbb = Prod::mul(b.clone(), b.clone());
+        let tab = a.clone() * b.clone();
+        let tcd = c.clone() * d.clone();
+        let taa = a.clone() * a.clone();
+        let tbb = b.clone() * b.clone();
         assert_eq!(tab, tcd);
         assert_eq!(taa, tbb);
         assert!(taa != tab);
+    }
+
+    #[test]
+    fn var_seq() {
+        let a = Prod::var("a");
+        let b = Prod::var("b");
+        let x = Prod::var("x");
+        let y = Prod::var("y");
+        let z = Prod::var("z");
+        let t0 = a * b;
+        let t1 = x * y;
+        let t2 = z.clone() * z;
+        let t3 = t0.clone() * t2.clone();
+        assert_eq!(t0.var_seq(), vec![1, 2]);
+        assert_eq!(t1.var_seq(), vec![1, 2]);
+        assert_eq!(t2.var_seq(), vec![1, 1]);
+        assert_eq!(t3.var_seq(), vec![1, 2, 3, 3]);
+    }
+
+    #[test]
+    fn cmp() {
+        let one = Prod::one();
+        let a = Prod::var("a");
+        let b = Prod::var("b");
+        let c = Prod::var("b");
+        assert_eq!(one.cmp(&one), Ordering::Equal);
+        assert_eq!(one.cmp(&a), Ordering::Greater);
+        assert_eq!(a.cmp(&one), Ordering::Less);
+        assert_eq!(a.cmp(&a), Ordering::Equal);
+        assert_eq!(a.cmp(&b), Ordering::Equal);
+        let ab = a.clone() * b.clone();
+        let abc = ab.clone() * c.clone();
+        assert_eq!(one.cmp(&ab), Ordering::Less);
+        assert_eq!(ab.cmp(&abc), Ordering::Less);
+        let aa = a.clone() * a.clone();
+        assert_eq!(aa.cmp(&ab), Ordering::Less);
     }
 }
