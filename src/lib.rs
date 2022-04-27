@@ -1,8 +1,5 @@
-#![feature(generic_associated_types)]
-#![feature(iter_order_by)]
-
-mod term;
-pub use term::*;
+mod word;
+pub use word::*;
 
 mod relation;
 pub use relation::*;

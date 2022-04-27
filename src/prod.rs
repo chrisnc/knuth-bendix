@@ -1,108 +1,127 @@
 use std::fmt::{self, Display};
 use std::ops;
 
-use crate::{Operator, Term};
-
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Prod {
     One,
-    Mul {
-        left: Box<Term<String, Prod>>,
-        right: Box<Term<String, Prod>>,
-    },
+    Mul,
 }
 use Prod::*;
 
-pub enum Iter<'a> {
-    Empty,
-    Right(&'a Term<String, Prod>),
-    Both {
-        left: &'a Term<String, Prod>,
-        right: &'a Term<String, Prod>,
-    },
-}
-
-impl<'a> Iterator for Iter<'a> {
-    type Item = &'a Term<String, Prod>;
-
-    fn next(&mut self) -> Option<&'a Term<String, Prod>> {
-        match *self {
-            Iter::Empty => None,
-            Iter::Right(right) => {
-                *self = Iter::Empty;
-                Some(right)
-            }
-            Iter::Both { left, right } => {
-                *self = Iter::Right(right);
-                Some(left)
-            }
+impl Display for Prod {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            One => "1".fmt(f),
+            Mul => "*".fmt(f),
         }
     }
 }
 
-impl Prod {
-    pub fn var<S: Into<String>>(s: S) -> Term<String, Prod> {
-        Term::Var(s.into())
+
+use crate::word::{self, Op, Var};
+
+pub type Symbol = word::Symbol<String, Prod>;
+pub type Word = word::Word<String, Prod>;
+
+impl word::Operator for Prod {
+    fn min_weight() -> u64 {
+        1
     }
 
-    pub fn one() -> Term<String, Prod> {
-        Term::Op(One)
-    }
-
-    pub fn iter(&self) -> Iter<'_> {
+    fn arity(&self) -> usize {
         match self {
-            One => Iter::Empty,
-            Mul { left, right } => Iter::Both { left, right },
+            One => 0,
+            Mul => 2,
         }
     }
-}
 
-impl Operator for Prod {
-    type Var = String;
-    type ArgIter<'a> = Iter<'a>;
-
-    fn arg_iter(&self) -> Iter {
+    fn weight(&self) -> u64 {
         match self {
-            One => Iter::Empty,
-            Mul { left, right } => Iter::Both { left, right },
+            One => 1,
+            Mul => 1,
         }
     }
 
     fn op_index(&self) -> u64 {
         match self {
-            One => 1,
-            Mul { .. } => 2,
+            One => 0,
+            Mul => 1,
         }
     }
 }
 
-impl ops::Mul for Term<String, Prod> {
-    type Output = Term<String, Prod>;
-    fn mul(self, rhs: Self) -> Self::Output {
-        Term::Op(Mul {
-            left: Box::new(self),
-            right: Box::new(rhs),
-        })
+impl ops::Mul for &Word {
+    type Output = Word;
+    fn mul(self, rhs: &Word) -> Word {
+        Word::op(Mul, &[self.clone(), rhs.clone()])
     }
 }
 
-fn fmt_with_parens<'a, V: fmt::Display>(t: &Term<V, Prod>, f: &mut fmt::Formatter) -> fmt::Result {
-    match t {
-        Term::Var(v) => v.fmt(f),
-        Term::Op(o) => match o {
-            One => "1".fmt(f),
-            Mul { .. } => "(".fmt(f).and(o.fmt(f)).and(")".fmt(f)),
-        },
+impl ops::Mul<Word> for &Word {
+    type Output = Word;
+    fn mul(self, rhs: Word) -> Word {
+        Word::op(Mul, &[self.clone(), rhs])
     }
 }
 
-impl fmt::Display for Prod {
+impl ops::Mul<&Word> for Word {
+    type Output = Word;
+    fn mul(self, rhs: &Word) -> Word {
+        Word::op(Mul, &[self, rhs.clone()])
+    }
+}
+
+impl ops::Mul for Word {
+    type Output = Word;
+    fn mul(self, rhs: Word) -> Word {
+        Word::op(Mul, &[self, rhs])
+    }
+}
+
+pub fn var<VF: Into<String>>(v: VF) -> Word {
+    Word::var(v)
+}
+
+pub fn one() -> Word {
+    Word::op(One, &[])
+}
+
+fn fmt_with_parens(w: &Word, f: &mut fmt::Formatter) -> fmt::Result {
+    match w.syms.first() {
+        Some(Var(v)) => v.fmt(f),
+        Some(Op(One)) => "1".fmt(f),
+        Some(Op(Mul)) => {
+            let mut sw = w.subwords();
+            if let (Some(left), Some(right)) = (sw.next(), sw.next()) {
+                "(".fmt(f)
+                    .and(fmt_with_parens(&left, f))
+                    .and(" * ".fmt(f))
+                    .and(fmt_with_parens(&right, f))
+                    .and(")".fmt(f))
+            } else {
+                fmt::Result::Err(fmt::Error::default())
+            }
+        }
+        None => fmt::Result::Err(fmt::Error::default()),
+    }
+}
+
+impl Display for Word {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            One => write!(f, "1"),
-            Mul { left, right } => fmt_with_parens(left, f)
-                .and(" * ".fmt(f))
-                .and(fmt_with_parens(right, f)),
+        match self.syms.first() {
+            Some(Var(v)) => v.fmt(f),
+            Some(Op(One)) => "1".fmt(f),
+            Some(Op(Mul)) => {
+                let mut sw = self.subwords();
+                if let (Some(left), Some(right)) = (sw.next(), sw.next()) {
+                    fmt_with_parens(&left, f)
+                        .and(" * ".fmt(f))
+                        .and(fmt_with_parens(&right, f))
+                } else {
+                    fmt::Result::Err(fmt::Error::default())
+                }
+            }
+            None => fmt::Result::Err(fmt::Error::default()),
         }
     }
 }
@@ -113,63 +132,70 @@ mod tests {
     use std::cmp::*;
 
     #[test]
+    fn well_formed() {
+        let a = var("a");
+        let p = &a * one();
+        assert!(a.is_well_formed());
+        assert!(p.is_well_formed());
+    }
+
+    #[test]
+    fn subwords() {
+        let a = var("a");
+        let b = var("b");
+        let c = var("c");
+        let d = var("d");
+        let p = &a * &b * &c * &d * one();
+
+        for sw in p.subwords() {
+            println!("{}", sw);
+        }
+    }
+
+    #[test]
     fn display() {
-        let a = Prod::var("a");
-        let b = Prod::var("b");
-        let m = a.clone() * b.clone();
-        let am = a.clone() * m.clone();
-        println!("{}", m);
-        println!("{}", am);
+        let a = var("a");
+        let b = var("b");
+        let ab = &a * &b;
+        let aab = &a * &ab;
+        let aab_left = &a * &a * &b;
+        println!("{}", ab);
+        println!("{}", aab);
+        println!("{}", aab_left);
     }
 
     #[test]
     fn eq() {
-        let a = Prod::var("a");
-        let b = Prod::var("b");
-        let c = Prod::var("c");
-        let d = Prod::var("d");
-        let tab = a.clone() * b.clone();
-        let tcd = c.clone() * d.clone();
-        let taa = a.clone() * a.clone();
-        let tbb = b.clone() * b.clone();
-        assert_eq!(tab, tcd);
-        assert_eq!(taa, tbb);
-        assert!(taa != tab);
-    }
-
-    #[test]
-    fn var_seq() {
-        let a = Prod::var("a");
-        let b = Prod::var("b");
-        let x = Prod::var("x");
-        let y = Prod::var("y");
-        let z = Prod::var("z");
-        let t0 = a * b;
-        let t1 = x * y;
-        let t2 = z.clone() * z;
-        let t3 = t0.clone() * t2.clone();
-        assert_eq!(t0.var_seq(), vec![1, 2]);
-        assert_eq!(t1.var_seq(), vec![1, 2]);
-        assert_eq!(t2.var_seq(), vec![1, 1]);
-        assert_eq!(t3.var_seq(), vec![1, 2, 3, 3]);
+        let a = var("a");
+        let b = var("b");
+        let c = var("c");
+        let d = var("d");
+        let ab = &a * &b;
+        let cd = &c * &d;
+        let aa = &a * &a;
+        let bb = &b * &b;
+        assert!(ab != cd);
+        assert!(aa != bb);
+        assert!(aa != ab);
+        assert_eq!(ab, ab);
     }
 
     #[test]
     fn cmp() {
-        let one = Prod::one();
-        let a = Prod::var("a");
-        let b = Prod::var("b");
-        let c = Prod::var("b");
-        assert_eq!(one.cmp(&one), Ordering::Equal);
-        assert_eq!(one.cmp(&a), Ordering::Greater);
-        assert_eq!(a.cmp(&one), Ordering::Less);
-        assert_eq!(a.cmp(&a), Ordering::Equal);
-        assert_eq!(a.cmp(&b), Ordering::Equal);
-        let ab = a.clone() * b.clone();
-        let abc = ab.clone() * c.clone();
-        assert_eq!(one.cmp(&ab), Ordering::Less);
-        assert_eq!(ab.cmp(&abc), Ordering::Less);
-        let aa = a.clone() * a.clone();
-        assert_eq!(aa.cmp(&ab), Ordering::Less);
+        let o = one();
+        let a = var("a");
+        let b = var("b");
+        let c = var("c");
+        assert_eq!(o.partial_cmp(&o), Some(Ordering::Equal));
+        assert_eq!(o.partial_cmp(&a), None);
+        assert_eq!(a.partial_cmp(&o), None);
+        assert_eq!(a.partial_cmp(&a), Some(Ordering::Equal));
+        assert_eq!(a.partial_cmp(&b), None);
+        let ab = &a * &b;
+        let abc = &ab * &c;
+        assert_eq!(o.partial_cmp(&ab), Some(Ordering::Less));
+        assert_eq!(ab.partial_cmp(&abc), Some(Ordering::Less));
+        let aa = &a * &a;
+        assert_eq!(aa.partial_cmp(&ab), None);
     }
 }
