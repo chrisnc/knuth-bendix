@@ -141,7 +141,7 @@ impl<V: Variable, O: Operator> PartialOrd for Word<V, O> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         // Case 1
         // w(alpha) > w(beta) and n(vi, alpha) >= n(vi, beta) for all vi
-        // For all variables, they must occur at least as often in alpha as in beta.
+        // Each variable must occur at least as often in alpha as in beta.
         let sw = self.weight();
         let ow = other.weight();
         let vars: BTreeSet<V> = self.vars().union(&other.vars()).cloned().collect();
@@ -154,7 +154,8 @@ impl<V: Variable, O: Operator> PartialOrd for Word<V, O> {
             Some(Ordering::Greater)
         // Case 2 from Knuth-Bendix
         // w(alpha) == w(beta) and n(vi, alpha) == n(vi, beta) for all vi
-        // For all variables, they must occur exactly as often in alpha as in beta.
+        // Each variable must occur exactly as often in alpha as in beta, otherwise equal
+        // weight words can't be compared.
         } else if sw == ow {
             for v in vars.iter() {
                 if self.n(v) != other.n(v) {
@@ -162,6 +163,7 @@ impl<V: Variable, O: Operator> PartialOrd for Word<V, O> {
                 }
             }
             match (self.syms.first(), other.syms.first()) {
+                // TODO: do we actually need to check arity and weight in these cases?
                 (Some(Op(f)), Some(Var(_))) if f.arity() == 1 && f.weight() == 0 => {
                     Some(Ordering::Greater)
                 }
@@ -185,6 +187,7 @@ impl<V: Variable, O: Operator> PartialOrd for Word<V, O> {
                 }
                 _ => None,
             }
+        // Case 1 but in the opposite direction.
         } else {
             for v in vars.iter() {
                 if self.n(v) > other.n(v) {
