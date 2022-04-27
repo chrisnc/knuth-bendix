@@ -161,14 +161,18 @@ impl<V: Variable, O: Operator> PartialOrd for Word<V, O> {
                     return None;
                 }
             }
-            // TODO: handle leading unary operator of weight 0
             match (self.syms.first(), other.syms.first()) {
-                (Some(Var(x)), Some(Var(y))) => {
-                    if x == y {
-                        Some(Ordering::Equal)
-                    } else {
-                        None
-                    }
+                (Some(Op(f)), Some(Var(_))) if f.arity() == 1 && f.weight() == 0 => {
+                    Some(Ordering::Greater)
+                }
+                (Some(Var(_)), Some(Op(f))) if f.arity() == 1 && f.weight() == 0 => {
+                    Some(Ordering::Less)
+                }
+                (Some(Var(_)), Some(Var(_))) => {
+                    // We already know these are the same variable from comparing n(v) for all
+                    // variables appearing in either word. If they are different variables then
+                    // None is returned in that loop.
+                    Some(Ordering::Equal)
                 }
                 (Some(Op(f)), Some(Op(g))) => {
                     if f.op_index() > g.op_index() {

@@ -1,9 +1,11 @@
 use std::fmt::{self, Display};
 use std::ops;
+use std::slice;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Prod {
     One,
+    Inv,
     Mul,
 }
 use Prod::*;
@@ -12,7 +14,8 @@ impl Display for Prod {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             One => "1".fmt(f),
-            Mul => "*".fmt(f),
+            Inv => "⁻¹".fmt(f),
+            Mul => " * ".fmt(f),
         }
     }
 }
@@ -31,6 +34,7 @@ impl word::Operator for Prod {
     fn arity(&self) -> usize {
         match self {
             One => 0,
+            Inv => 1,
             Mul => 2,
         }
     }
@@ -38,6 +42,7 @@ impl word::Operator for Prod {
     fn weight(&self) -> u64 {
         match self {
             One => 1,
+            Inv => 0,
             Mul => 1,
         }
     }
@@ -45,7 +50,8 @@ impl word::Operator for Prod {
     fn op_index(&self) -> u64 {
         match self {
             One => 0,
-            Mul => 1,
+            Inv => 1,
+            Mul => 2,
         }
     }
 }
@@ -86,16 +92,27 @@ pub fn one() -> Word {
     Word::op(One, &[])
 }
 
+pub fn inv(w: &Word) -> Word {
+    Word::op(Inv, slice::from_ref(w))
+}
+
 fn fmt_with_parens(w: &Word, f: &mut fmt::Formatter) -> fmt::Result {
     match w.syms.first() {
         Some(Var(v)) => v.fmt(f),
-        Some(Op(One)) => "1".fmt(f),
+        Some(Op(One)) => One.fmt(f),
+        Some(Op(Inv)) => {
+            if let Some(arg) = w.subwords().next() {
+                fmt_with_parens(&arg, f).and(Inv.fmt(f))
+            } else {
+                fmt::Result::Err(fmt::Error::default())
+            }
+        }
         Some(Op(Mul)) => {
             let mut sw = w.subwords();
             if let (Some(left), Some(right)) = (sw.next(), sw.next()) {
                 "(".fmt(f)
                     .and(fmt_with_parens(&left, f))
-                    .and(" * ".fmt(f))
+                    .and(Mul.fmt(f))
                     .and(fmt_with_parens(&right, f))
                     .and(")".fmt(f))
             } else {
@@ -109,19 +126,21 @@ fn fmt_with_parens(w: &Word, f: &mut fmt::Formatter) -> fmt::Result {
 impl Display for Word {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.syms.first() {
-            Some(Var(v)) => v.fmt(f),
-            Some(Op(One)) => "1".fmt(f),
+            /*
+             * Format a top-level Mul without surrounding parentheses; otherwise, call into
+             * fmt_with_parens.
+             */
             Some(Op(Mul)) => {
                 let mut sw = self.subwords();
                 if let (Some(left), Some(right)) = (sw.next(), sw.next()) {
                     fmt_with_parens(&left, f)
-                        .and(" * ".fmt(f))
+                        .and(Mul.fmt(f))
                         .and(fmt_with_parens(&right, f))
                 } else {
                     fmt::Result::Err(fmt::Error::default())
                 }
-            }
-            None => fmt::Result::Err(fmt::Error::default()),
+            },
+            _ => fmt_with_parens(self, f),
         }
     }
 }
@@ -159,9 +178,13 @@ mod tests {
         let ab = &a * &b;
         let aab = &a * &ab;
         let aab_left = &a * &a * &b;
+        let invaab = inv(&aab);
+        let invone = inv(&one());
         println!("{}", ab);
         println!("{}", aab);
         println!("{}", aab_left);
+        println!("{}", invaab);
+        println!("{}", invone);
     }
 
     #[test]
@@ -181,11 +204,13 @@ mod tests {
     }
 
     #[test]
-    fn cmp() {
+    fn partial_cmp() {
         let o = one();
         let a = var("a");
         let b = var("b");
         let c = var("c");
+        let invc = inv(&c);
+        let invinvc = inv(&inv(&c));
         assert_eq!(o.partial_cmp(&o), Some(Ordering::Equal));
         assert_eq!(o.partial_cmp(&a), None);
         assert_eq!(a.partial_cmp(&o), None);
@@ -197,5 +222,7 @@ mod tests {
         assert_eq!(ab.partial_cmp(&abc), Some(Ordering::Less));
         let aa = &a * &a;
         assert_eq!(aa.partial_cmp(&ab), None);
+        assert_eq!(invc.partial_cmp(&c), Some(Ordering::Greater));
+        assert_eq!(invc.partial_cmp(&invinvc), Some(Ordering::Less));
     }
 }
