@@ -1,6 +1,6 @@
 use std::cmp::*;
-use std::collections::BTreeSet;
-use std::fmt;
+use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::{self, Display};
 
 pub trait Variable: Eq + Ord + Clone {}
 
@@ -40,7 +40,16 @@ impl<V: Variable, O: Operator> Symbol<V, O> {
     fn weight(&self) -> u64 {
         match self {
             Var(_) => O::min_weight(),
-            Op(o) => o.weight(),
+            Op(f) => f.weight(),
+        }
+    }
+}
+
+impl<V: Display, O: Display> Display for Symbol<V, O> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Var(v) => v.fmt(f),
+            Op(o) => o.fmt(f),
         }
     }
 }
@@ -59,8 +68,8 @@ impl<V: Variable, O: Operator> Word<V, O> {
         Word::from_sym(Var(v.into()))
     }
 
-    pub fn op<OF: Into<O>>(o: OF, args: &[Word<V, O>]) -> Word<V, O> {
-        let mut out = Word::from_sym(Op(o.into()));
+    pub fn op<OF: Into<O>>(f: OF, args: &[Word<V, O>]) -> Word<V, O> {
+        let mut out = Word::from_sym(Op(f.into()));
         for a in args {
             out.syms.extend(a.syms.clone());
         }
@@ -100,6 +109,18 @@ impl<V: Variable, O: Operator> Word<V, O> {
             syms: &self.syms,
             i: 1,
             nargs: self.syms.first().map_or(0, Symbol::arity),
+        }
+    }
+
+    pub fn subst(&mut self, vars: &BTreeMap<V, Word<V, O>>) {
+        for (v, w) in vars.iter() {
+            while let Some(i) =
+                self.syms
+                    .iter()
+                    .position(|s| if let Var(x) = s { x == v } else { false })
+            {
+                self.syms.splice(i..i + 1, w.syms.clone());
+            }
         }
     }
 }
@@ -163,19 +184,24 @@ impl<V: Variable, O: Operator> PartialOrd for Word<V, O> {
                 }
             }
             match (self.syms.first(), other.syms.first()) {
-                // TODO: do we actually need to check arity and weight in these cases?
-                (Some(Op(f)), Some(Var(_))) if f.arity() == 1 && f.weight() == 0 => {
-                    Some(Ordering::Greater)
-                }
-                (Some(Var(_)), Some(Op(f))) if f.arity() == 1 && f.weight() == 0 => {
-                    Some(Ordering::Less)
-                }
-                (Some(Var(_)), Some(Var(_))) => {
-                    // We already know these are the same variable from comparing n(v) for all
-                    // variables appearing in either word. If they are different variables then
-                    // None is returned in that loop.
-                    Some(Ordering::Equal)
-                }
+                // This covers the case where self is f^N x and other is x. Each word has exactly
+                // the same variables here, so if one side is just a variable, then the other side
+                // also only has one of that same variable. They also have the same weight, which
+                // means that there are no operators which have positive weight, otherwise the only
+                // side with any operators would have larger weight. Operators with arity 2 or more
+                // may have zero weight, but this would ultimately require additional variables or
+                // nullary operators on one side, which would contribute to a larger weight, and so
+                // can't happen here. Therefore the only operator in play here is a unary operator
+                // of zero weight, and the ordering defines this to mean that the one with an
+                // operator is greater than the one without.
+                (Some(Op(_)), Some(Var(_))) => Some(Ordering::Greater),
+                (Some(Var(_)), Some(Op(_))) => Some(Ordering::Less),
+
+                // We already know these are the same variable from comparing n(v) for all
+                // variables appearing in either word. If they are different variables then
+                // None is returned in that loop.
+                (Some(Var(_)), Some(Var(_))) => Some(Ordering::Equal),
+
                 (Some(Op(f)), Some(Op(g))) => {
                     if f.op_index() > g.op_index() {
                         Some(Ordering::Greater)
@@ -195,15 +221,6 @@ impl<V: Variable, O: Operator> PartialOrd for Word<V, O> {
                 }
             }
             Some(Ordering::Less)
-        }
-    }
-}
-
-impl<V: fmt::Display, O: fmt::Display> fmt::Display for Symbol<V, O> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Var(v) => v.fmt(f),
-            Op(o) => o.fmt(f),
         }
     }
 }

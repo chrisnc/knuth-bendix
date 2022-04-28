@@ -149,6 +149,7 @@ impl Display for Word {
 mod tests {
     use crate::prod::*;
     use std::cmp::*;
+    use std::collections::BTreeMap;
 
     #[test]
     fn well_formed() {
@@ -224,5 +225,17 @@ mod tests {
         assert_eq!(aa.partial_cmp(&ab), None);
         assert_eq!(invc.partial_cmp(&c), Some(Ordering::Greater));
         assert_eq!(invc.partial_cmp(&invinvc), Some(Ordering::Less));
+    }
+
+    #[test]
+    fn subst() {
+        let a = var("a");
+        let b = var("b");
+        let c = var("c");
+        let bc = &b * &c;
+        let mut w = a.clone();
+        let vars = BTreeMap::<String, Word>::from([("a".to_string(), bc.clone())]);
+        w.subst(&vars);
+        assert_eq!(w, bc);
     }
 }
