@@ -233,9 +233,7 @@ mod tests {
         let b = var("b");
         let c = var("c");
         let bc = &b * &c;
-        let mut w = a.clone();
         let vars = BTreeMap::<String, Word>::from([("a".to_string(), bc.clone())]);
-        w.subst(&vars);
-        assert_eq!(w, bc);
+        assert_eq!(a.subst(&vars), bc);
     }
 }

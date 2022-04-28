@@ -1,6 +1,7 @@
 use std::cmp::*;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{self, Display};
+use std::slice;
 
 pub trait Variable: Eq + Ord + Clone {}
 
@@ -21,11 +22,25 @@ pub enum Symbol<V, O> {
 pub use Symbol::*;
 
 impl<V, O: Operator> Symbol<V, O> {
-    fn arity(&self) -> usize {
+    pub fn arity(&self) -> usize {
         if let Op(f) = self {
             f.arity()
         } else {
             0
+        }
+    }
+
+    pub fn var(&self) -> Option<&V> {
+        match self {
+            Var(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub fn op(&self) -> Option<&O> {
+        match self {
+            Op(f) => Some(f),
+            _ => None,
         }
     }
 }
@@ -112,15 +127,19 @@ impl<V: Variable, O: Operator> Word<V, O> {
         }
     }
 
-    pub fn subst(&mut self, vars: &BTreeMap<V, Word<V, O>>) {
-        for (v, w) in vars.iter() {
-            while let Some(i) =
-                self.syms
-                    .iter()
-                    .position(|s| if let Var(x) = s { x == v } else { false })
-            {
-                self.syms.splice(i..i + 1, w.syms.clone());
-            }
+    pub fn subst(&self, vars: &BTreeMap<V, Word<V, O>>) -> Word<V, O> {
+        Word {
+            syms: self
+                .syms
+                .iter()
+                .map(|s| {
+                    s.var()
+                        .and_then(|v| vars.get(v))
+                        .map_or(slice::from_ref(s), |w| w.syms.as_slice())
+                })
+                .flatten()
+                .cloned()
+                .collect(),
         }
     }
 }
