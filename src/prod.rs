@@ -2,7 +2,7 @@ use std::fmt::{self, Display};
 use std::ops;
 use std::slice;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Prod {
     One,
     Inv,
@@ -44,14 +44,6 @@ impl word::Operator for Prod {
             One => 1,
             Inv => 0,
             Mul => 1,
-        }
-    }
-
-    fn op_index(&self) -> u64 {
-        match self {
-            One => 0,
-            Inv => 1,
-            Mul => 2,
         }
     }
 }
@@ -235,5 +227,14 @@ mod tests {
         let bc = &b * &c;
         let vars = BTreeMap::<String, Word>::from([("a".to_string(), bc.clone())]);
         assert_eq!(a.subst(&vars), bc);
+    }
+
+    #[test]
+    fn unify() {
+        let a = var("a");
+        let b = var("b");
+        let c = var("c");
+        let bc = &b * &c;
+        println!("{:?}", a.unify(&bc));
     }
 }

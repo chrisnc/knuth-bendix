@@ -7,11 +7,10 @@ pub trait Variable: Eq + Ord + Clone {}
 
 impl Variable for String {}
 
-pub trait Operator: Eq + Clone {
+pub trait Operator: Eq + Ord + Clone {
     fn min_weight() -> u64;
     fn arity(&self) -> usize;
     fn weight(&self) -> u64;
-    fn op_index(&self) -> u64;
 }
 
 #[derive(Clone, Debug, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -142,6 +141,42 @@ impl<V: Variable, O: Operator> Word<V, O> {
                 .collect(),
         }
     }
+
+    /*
+     * Compute the substitutions of the variables in this word such that it is equal to another
+     * word, or return None if this is not possible.
+     */
+    pub fn unify(&self, other: &Word<V, O>) -> Option<BTreeMap<V, Word<V, O>>> {
+        match (self.syms.first(), other.syms.first()) {
+            (Some(Var(x)), Some(_)) => {
+                // If self is just a variable, we can just substitute the entire other word.
+                Some(BTreeMap::from([(x.clone(), other.clone())]))
+            }
+            (Some(Op(f)), Some(Op(g))) if f == g => {
+                // If self and other are both the same operator, we can unify recursively.
+                let mut subs = BTreeMap::new();
+                for (s, t) in self.subwords().zip(other.subwords()) {
+                    if let Some(sub) = s.unify(&t) {
+                        for (v, w) in sub.iter() {
+                            if let Some(ow) = subs.insert(v.clone(), w.clone()) {
+                                if &ow != w {
+                                    // A substitution for this variable already existed and was different.
+                                    return None;
+                                }
+                            }
+                        }
+                        return Some(subs);
+                    } else {
+                        return None;
+                    }
+                }
+                None
+            }
+            // All other cases result in no possible unification. (Different operator, an operator
+            // in self when other is just a variable, or missing symbols.)
+            _ => None,
+        }
+    }
 }
 
 pub struct Subwords<'a, V, O> {
@@ -222,14 +257,15 @@ impl<V: Variable, O: Operator> PartialOrd for Word<V, O> {
                 (Some(Var(_)), Some(Var(_))) => Some(Ordering::Equal),
 
                 (Some(Op(f)), Some(Op(g))) => {
-                    if f.op_index() > g.op_index() {
+                    if f > g {
                         Some(Ordering::Greater)
-                    } else if f.op_index() == g.op_index() {
+                    } else if f == g {
                         self.subwords().partial_cmp(other.subwords())
                     } else {
                         Some(Ordering::Less)
                     }
                 }
+                // If either syms is empty. Shouldn't happen.
                 _ => None,
             }
         // Case 1 but in the opposite direction.
