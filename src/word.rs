@@ -21,14 +21,6 @@ pub enum Symbol<V, O> {
 pub use Symbol::*;
 
 impl<V, O: Operator> Symbol<V, O> {
-    pub fn arity(&self) -> usize {
-        if let Op(f) = self {
-            f.arity()
-        } else {
-            0
-        }
-    }
-
     pub fn var(&self) -> Option<&V> {
         match self {
             Var(v) => Some(v),
@@ -41,6 +33,10 @@ impl<V, O: Operator> Symbol<V, O> {
             Op(f) => Some(f),
             _ => None,
         }
+    }
+
+    pub fn arity(&self) -> usize {
+        self.op().map_or(0, Operator::arity)
     }
 }
 
@@ -63,7 +59,7 @@ impl<V: Display, O: Display> Display for Symbol<V, O> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Var(v) => v.fmt(f),
-            Op(o) => o.fmt(f),
+            Op(g) => g.fmt(f),
         }
     }
 }
@@ -148,9 +144,9 @@ impl<V: Variable, O: Operator> Word<V, O> {
      */
     pub fn unify(&self, other: &Word<V, O>) -> Option<BTreeMap<V, Word<V, O>>> {
         match (self.syms.first(), other.syms.first()) {
-            (Some(Var(x)), Some(_)) => {
+            (Some(Var(v)), Some(_)) => {
                 // If self is just a variable, we can just substitute the entire other word.
-                Some(BTreeMap::from([(x.clone(), other.clone())]))
+                Some(BTreeMap::from([(v.clone(), other.clone())]))
             }
             (Some(Op(f)), Some(Op(g))) if f == g => {
                 // If self and other are both the same operator, we can unify recursively.
