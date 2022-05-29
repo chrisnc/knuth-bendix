@@ -1,13 +1,13 @@
 use std::cmp::*;
 use std::collections::{BTreeMap, BTreeSet};
-use std::fmt::{self, Display};
+use std::fmt::{self, Debug, Display};
 use std::slice;
 
-pub trait Variable: Eq + Ord + Clone {}
+pub trait Variable: Eq + Ord + Clone + Debug {}
 
 impl Variable for String {}
 
-pub trait Operator: Eq + Ord + Clone {
+pub trait Operator: Eq + Ord + Clone + Debug {
     fn min_weight() -> u64;
     fn arity(&self) -> usize;
     fn weight(&self) -> u64;
@@ -143,35 +143,53 @@ impl<V: Variable, O: Operator> Word<V, O> {
      * word, or return None if this is not possible.
      */
     pub fn unify(&self, other: &Word<V, O>) -> Option<BTreeMap<V, Word<V, O>>> {
+        println!("unifying {:?} with {:?}", self, other);
         match (self.syms.first(), other.syms.first()) {
             (Some(Var(v)), Some(_)) => {
                 // If self is just a variable, we can just substitute the entire other word.
-                Some(BTreeMap::from([(v.clone(), other.clone())]))
+                let vmap = BTreeMap::from([(v.clone(), other.clone())]);
+                println!("unification map: {:?}", vmap);
+                Some(vmap)
             }
             (Some(Op(f)), Some(Op(g))) if f == g => {
                 // If self and other are both the same operator, we can unify recursively.
-                let mut subs = BTreeMap::new();
+                let mut vmap = BTreeMap::new();
                 for (s, t) in self.subwords().zip(other.subwords()) {
                     if let Some(sub) = s.unify(&t) {
                         for (v, w) in sub.iter() {
-                            if let Some(ow) = subs.insert(v.clone(), w.clone()) {
+                            if let Some(ow) = vmap.insert(v.clone(), w.clone()) {
                                 if &ow != w {
                                     // A substitution for this variable already existed and was different.
+                                    println!("no unification found");
                                     return None;
                                 }
                             }
                         }
-                        return Some(subs);
                     } else {
+                        println!("no unification found");
                         return None;
                     }
                 }
-                None
+                println!("unification map: {:?}", vmap);
+                return Some(vmap);
             }
             // All other cases result in no possible unification. (Different operator, an operator
             // in self when other is just a variable, or missing symbols.)
-            _ => None,
+            _ => {
+                println!("no unification found");
+                None
+            }
         }
+    }
+}
+
+pub fn print_subs<V, O>(subs: &BTreeMap<V, Word<V, O>>)
+where
+    V: Display + Ord,
+    Word<V, O>: Display,
+{
+    for (v, w) in subs.iter() {
+        println!("{} → {}", v, w);
     }
 }
 
@@ -275,5 +293,75 @@ impl<V: Variable, O: Operator> PartialOrd for Word<V, O> {
         }
     }
 }
+
+/// Find the critical term between t and u if one exists.
+pub fn critical_term<V: Variable, O: Operator>(
+    t: &Word<V, O>,
+    u: &Word<V, O>,
+) -> Option<Word<V, O>> {
+    println!("computing critical term between {:?} and {:?}", t, u);
+    if let Some(Var(_)) = t.syms.first() {
+        println!("no critical term");
+        None
+    } else if let Some(Var(_)) = u.syms.first() {
+        println!("no critical term");
+        None
+    } else if let Some(vmap) = t.unify(u) {
+        let ct = t.subst(&vmap);
+        println!("left critical term found: {:?}", ct);
+        Some(ct)
+    } else if let Some(vmap) = u.unify(t) {
+        let ct = u.subst(&vmap);
+        println!("right critical term found: {:?}", ct);
+        Some(ct)
+    } else {
+        println!("recursing subwords of {:?}", t);
+        for ts in t.subwords() {
+            println!("subword {:?}", ts);
+            if let Some(ct) = critical_term(&ts, u) {
+                return Some(ct);
+            }
+        }
+        println!("recursing subwords of {:?}", u);
+        for us in u.subwords() {
+            println!("subword {:?}", us);
+            if let Some(ct) = critical_term(t, &us) {
+                return Some(ct);
+            }
+        }
+        None
+    }
+}
+
+type Axiom<V, O> = (Word<V, O>, Word<V, O>);
+type Rule<V, O> = (Word<V, O>, Word<V, O>);
+
+pub fn knuth_bendix<V: Clone, O: Clone>(axioms: &Vec<Axiom<V, O>>) -> Option<Vec<Rule<V, O>>> {
+    let mut axioms: Vec<Axiom<V, O>> = axioms.clone();
+    let mut rules = Vec::new();
+    while let Some(axiom) = axioms.pop() {
+        // apply all rules to each side of axiom
+        //
+        // if axiom is x = x, continue
+        //
+        // flip axiom based on reduction ordering and add it to rules
+        // if the two sides of the axiom aren't comparable, return None
+        //
+        // superpose new rule's LHS onto all LHS's (including itself)
+        // introduce newly found critical pairs as axioms
+        //
+        // TODO: termination condition for divergence?
+        rules.push(axiom);
+    }
+    Some(rules)
+}
+
+/*
+ * Knuth-Bendix algorithm:
+ *
+ * For all pairs of reductions (a -> b, c -> d) in R:
+ * check...
+ *
+ */
 
 // TODO: implement common-subterm search

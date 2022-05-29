@@ -139,6 +139,7 @@ impl Display for Word {
 
 #[cfg(test)]
 mod tests {
+    use crate::print_subs;
     use crate::prod::*;
     use std::cmp::*;
     use std::collections::BTreeMap;
@@ -235,6 +236,9 @@ mod tests {
         let b = var("b");
         let c = var("c");
         let bc = &b * &c;
-        println!("{:?}", a.unify(&bc));
+        if let Some(subs) = a.unify(&bc) {
+            print_subs(&subs);
+        }
+        //println!("{:?}", a.unify(&bc));
     }
 }
