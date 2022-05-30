@@ -143,12 +143,10 @@ impl<V: Variable, O: Operator> Word<V, O> {
      * word, or return None if this is not possible.
      */
     pub fn unify(&self, other: &Word<V, O>) -> Option<BTreeMap<V, Word<V, O>>> {
-        println!("unifying {:?} with {:?}", self, other);
         match (self.syms.first(), other.syms.first()) {
             (Some(Var(v)), Some(_)) => {
                 // If self is just a variable, we can just substitute the entire other word.
                 let vmap = BTreeMap::from([(v.clone(), other.clone())]);
-                println!("unification map: {:?}", vmap);
                 Some(vmap)
             }
             (Some(Op(f)), Some(Op(g))) if f == g => {
@@ -159,26 +157,20 @@ impl<V: Variable, O: Operator> Word<V, O> {
                         for (v, w) in sub.iter() {
                             if let Some(ow) = vmap.insert(v.clone(), w.clone()) {
                                 if &ow != w {
-                                    // A substitution for this variable already existed and was different.
-                                    println!("no unification found");
+                                    // A different substitution for this variable already exists.
                                     return None;
                                 }
                             }
                         }
                     } else {
-                        println!("no unification found");
                         return None;
                     }
                 }
-                println!("unification map: {:?}", vmap);
                 return Some(vmap);
             }
             // All other cases result in no possible unification. (Different operator, an operator
             // in self when other is just a variable, or missing symbols.)
-            _ => {
-                println!("no unification found");
-                None
-            }
+            _ => None,
         }
     }
 }
@@ -299,33 +291,40 @@ pub fn critical_term<V: Variable, O: Operator>(
     t: &Word<V, O>,
     u: &Word<V, O>,
 ) -> Option<Word<V, O>> {
-    println!("computing critical term between {:?} and {:?}", t, u);
     if let Some(Var(_)) = t.syms.first() {
-        println!("no critical term");
         None
     } else if let Some(Var(_)) = u.syms.first() {
-        println!("no critical term");
         None
     } else if let Some(vmap) = t.unify(u) {
         let ct = t.subst(&vmap);
-        println!("left critical term found: {:?}", ct);
         Some(ct)
     } else if let Some(vmap) = u.unify(t) {
         let ct = u.subst(&vmap);
-        println!("right critical term found: {:?}", ct);
         Some(ct)
     } else {
-        println!("recursing subwords of {:?}", t);
         for ts in t.subwords() {
-            println!("subword {:?}", ts);
-            if let Some(ct) = critical_term(&ts, u) {
+            // skip trivial subwords
+            if let Some(Var(_)) = ts.syms.first() {
+                continue;
+            }
+            if let Some(vmap) = ts.unify(u) {
+                let ct = t.subst(&vmap);
+                return Some(ct);
+            } else if let Some(vmap) = u.unify(&ts) {
+                let ct = u.subst(&vmap);
                 return Some(ct);
             }
         }
-        println!("recursing subwords of {:?}", u);
         for us in u.subwords() {
-            println!("subword {:?}", us);
-            if let Some(ct) = critical_term(t, &us) {
+            // skip trivial subwords
+            if let Some(Var(_)) = us.syms.first() {
+                continue;
+            }
+            if let Some(vmap) = us.unify(t) {
+                let ct = u.subst(&vmap);
+                return Some(ct);
+            } else if let Some(vmap) = t.unify(&us) {
+                let ct = t.subst(&vmap);
                 return Some(ct);
             }
         }
