@@ -14,13 +14,13 @@ pub trait Operator: Eq + Ord + Clone + Debug {
 }
 
 #[derive(Clone, Debug, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Symbol<V, O> {
+pub enum Symbol<V: Variable, O: Operator> {
     Var(V),
     Op(O),
 }
 pub use Symbol::*;
 
-impl<V, O: Operator> Symbol<V, O> {
+impl<V: Variable, O: Operator> Symbol<V, O> {
     pub fn var(&self) -> Option<&V> {
         match self {
             Var(v) => Some(v),
@@ -38,15 +38,7 @@ impl<V, O: Operator> Symbol<V, O> {
     pub fn arity(&self) -> usize {
         self.op().map_or(0, Operator::arity)
     }
-}
 
-impl<V, O> From<V> for Symbol<V, O> {
-    fn from(v: V) -> Symbol<V, O> {
-        Var(v)
-    }
-}
-
-impl<V: Variable, O: Operator> Symbol<V, O> {
     fn weight(&self) -> u64 {
         match self {
             Var(_) => O::min_weight(),
@@ -55,18 +47,36 @@ impl<V: Variable, O: Operator> Symbol<V, O> {
     }
 }
 
-impl<V: Display, O: Display> Display for Symbol<V, O> {
+impl<V: Variable, O: Operator> From<V> for Symbol<V, O> {
+    fn from(v: V) -> Symbol<V, O> {
+        Var(v)
+    }
+}
+
+impl<V: Variable + Display, O: Operator + Display> Display for Symbol<V, O> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Var(v) => v.fmt(f),
-            Op(g) => g.fmt(f),
+            Var(v) => write!(f, "{}", v),
+            Op(g) => write!(f, "{}", g),
         }
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct Word<V, O> {
+pub struct Word<V: Variable, O: Operator> {
     pub syms: Vec<Symbol<V, O>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Axiom<V: Variable, O: Operator> {
+    pub left: Word<V, O>,
+    pub right: Word<V, O>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Rule<V: Variable, O: Operator> {
+    pub left: Word<V, O>,
+    pub right: Word<V, O>,
 }
 
 impl<V: Variable, O: Operator> Word<V, O> {
@@ -90,7 +100,7 @@ impl<V: Variable, O: Operator> Word<V, O> {
         self.syms.iter().map(Symbol::weight).sum()
     }
 
-    fn n(&self, var: &V) -> usize {
+    fn n_of_var(&self, var: &V) -> usize {
         let v = Var(var.clone());
         self.syms.iter().filter(|s| **s == v).count()
     }
@@ -175,9 +185,8 @@ impl<V: Variable, O: Operator> Word<V, O> {
     }
 }
 
-pub fn print_subs<V, O>(subs: &BTreeMap<V, Word<V, O>>)
+pub fn print_subs<V: Variable + Display, O: Operator>(subs: &BTreeMap<V, Word<V, O>>)
 where
-    V: Display + Ord,
     Word<V, O>: Display,
 {
     for (v, w) in subs.iter() {
@@ -185,7 +194,7 @@ where
     }
 }
 
-pub struct Subwords<'a, V, O> {
+pub struct Subwords<'a, V: Variable, O: Operator> {
     syms: &'a Vec<Symbol<V, O>>,
     i: usize,
     nargs: usize,
@@ -221,25 +230,25 @@ impl<V: Variable, O: Operator> PartialEq for Word<V, O> {
 impl<V: Variable, O: Operator> PartialOrd for Word<V, O> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         // Case 1
-        // w(alpha) > w(beta) and n(vi, alpha) >= n(vi, beta) for all vi
+        // w(alpha) > w(beta) and n_of_var(vi, alpha) >= n_of_var(vi, beta) for all vi
         // Each variable must occur at least as often in alpha as in beta.
         let sw = self.weight();
         let ow = other.weight();
         let vars: BTreeSet<V> = self.vars().union(&other.vars()).cloned().collect();
         if sw > ow {
             for v in vars.iter() {
-                if self.n(v) < other.n(v) {
+                if self.n_of_var(v) < other.n_of_var(v) {
                     return None;
                 }
             }
             Some(Ordering::Greater)
         // Case 2 from Knuth-Bendix
-        // w(alpha) == w(beta) and n(vi, alpha) == n(vi, beta) for all vi
+        // w(alpha) == w(beta) and n_of_var(vi, alpha) == n_of_var(vi, beta) for all vi
         // Each variable must occur exactly as often in alpha as in beta, otherwise equal
         // weight words can't be compared.
         } else if sw == ow {
             for v in vars.iter() {
-                if self.n(v) != other.n(v) {
+                if self.n_of_var(v) != other.n_of_var(v) {
                     return None;
                 }
             }
@@ -257,7 +266,7 @@ impl<V: Variable, O: Operator> PartialOrd for Word<V, O> {
                 (Some(Op(_)), Some(Var(_))) => Some(Ordering::Greater),
                 (Some(Var(_)), Some(Op(_))) => Some(Ordering::Less),
 
-                // We already know these are the same variable from comparing n(v) for all
+                // We already know these are the same variable from comparing n_of_var(v) for all
                 // variables appearing in either word. If they are different variables then
                 // None is returned in that loop.
                 (Some(Var(_)), Some(Var(_))) => Some(Ordering::Equal),
@@ -277,7 +286,7 @@ impl<V: Variable, O: Operator> PartialOrd for Word<V, O> {
         // Case 1 but in the opposite direction.
         } else {
             for v in vars.iter() {
-                if self.n(v) > other.n(v) {
+                if self.n_of_var(v) > other.n_of_var(v) {
                     return None;
                 }
             }
@@ -332,10 +341,7 @@ pub fn critical_term<V: Variable, O: Operator>(
     }
 }
 
-type Axiom<V, O> = (Word<V, O>, Word<V, O>);
-type Rule<V, O> = (Word<V, O>, Word<V, O>);
-
-pub fn knuth_bendix<V: Clone, O: Clone>(axioms: &Vec<Axiom<V, O>>) -> Option<Vec<Rule<V, O>>> {
+pub fn knuth_bendix<V: Variable, O: Operator>(axioms: &Vec<Axiom<V, O>>) -> Option<Vec<Rule<V, O>>> {
     let mut axioms: Vec<Axiom<V, O>> = axioms.clone();
     let mut rules = Vec::new();
     while let Some(axiom) = axioms.pop() {
@@ -350,7 +356,10 @@ pub fn knuth_bendix<V: Clone, O: Clone>(axioms: &Vec<Axiom<V, O>>) -> Option<Vec
         // introduce newly found critical pairs as axioms
         //
         // TODO: termination condition for divergence?
-        rules.push(axiom);
+        rules.push(Rule {
+            left: axiom.left,
+            right: axiom.right,
+        });
     }
     Some(rules)
 }
