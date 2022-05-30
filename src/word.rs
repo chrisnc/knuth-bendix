@@ -272,12 +272,12 @@ impl<V: Variable, O: Operator> PartialOrd for Word<V, O> {
                 (Some(Var(_)), Some(Var(_))) => Some(Ordering::Equal),
 
                 (Some(Op(f)), Some(Op(g))) => {
-                    if f > g {
-                        Some(Ordering::Greater)
-                    } else if f == g {
+                    if f == g {
+                        // If the operators are the same, must compare subwords lexicographically.
                         self.subwords().partial_cmp(other.subwords())
                     } else {
-                        Some(Ordering::Less)
+                        // Otherwise compare the operators directly.
+                        Some(f.cmp(g))
                     }
                 }
                 // If either syms is empty. Shouldn't happen.
@@ -341,7 +341,9 @@ pub fn critical_term<V: Variable, O: Operator>(
     }
 }
 
-pub fn knuth_bendix<V: Variable, O: Operator>(axioms: &Vec<Axiom<V, O>>) -> Option<Vec<Rule<V, O>>> {
+pub fn knuth_bendix<V: Variable, O: Operator>(
+    axioms: &Vec<Axiom<V, O>>,
+) -> Option<Vec<Rule<V, O>>> {
     let mut axioms: Vec<Axiom<V, O>> = axioms.clone();
     let mut rules = Vec::new();
     while let Some(axiom) = axioms.pop() {
