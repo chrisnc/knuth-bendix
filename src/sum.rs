@@ -76,6 +76,20 @@ impl ops::Add for Word {
     }
 }
 
+impl ops::Neg for Word {
+    type Output = Word;
+    fn neg(self) -> Word {
+        Word::op(Negate, &[self])
+    }
+}
+
+impl ops::Neg for &Word {
+    type Output = Word;
+    fn neg(self) -> Word {
+        Word::op(Negate, &[self.clone()])
+    }
+}
+
 pub fn var<VF: Into<String>>(v: VF) -> Word {
     Word::var(v)
 }
@@ -173,8 +187,8 @@ mod tests {
         let ab = &a + &b;
         let aab = &a + &ab;
         let aab_left = &a + &a + &b;
-        let negateaab = negate(&aab);
-        let negatezero = negate(&zero());
+        let negateaab = -&aab;
+        let negatezero = -zero();
         println!("{}", ab);
         println!("{}", aab);
         println!("{}", aab_left);
@@ -204,8 +218,8 @@ mod tests {
         let a = var("a");
         let b = var("b");
         let c = var("c");
-        let negatec = negate(&c);
-        let negatenegatec = negate(&negate(&c));
+        let negatec = -&c;
+        let negatenegatec = -&-&c;
         assert_eq!(o.partial_cmp(&o), Some(Ordering::Equal));
         assert_eq!(o.partial_cmp(&a), None);
         assert_eq!(a.partial_cmp(&o), None);
@@ -246,8 +260,11 @@ mod tests {
 
     #[test]
     fn critical() {
-        let t = negate(&var("x")) + var("x");
-        let u = (var("x") + var("y")) + var("z");
+        let x = var("x");
+        let y = var("x");
+        let z = var("x");
+        let t = -&x + &x;
+        let u = x + y + z;
         println!("t: {}", t);
         println!("u: {}", u);
         if let Some(ct) = critical_term(&t, &u) {
