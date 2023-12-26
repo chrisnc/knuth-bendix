@@ -236,9 +236,10 @@ mod tests {
         let b = var("b");
         let c = var("c");
         let bc = &b * &c;
-        if let Some(subs) = a.unify(&bc) {
+        let u = a.unify(&bc);
+        println!("{:?}", u);
+        if let Some(subs) = u {
             print_subs(&subs);
         }
-        //println!("{:?}", a.unify(&bc));
     }
 }
